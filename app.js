@@ -15,6 +15,7 @@ app.listen(port, function () {
   console.log('Listening on port ' + port);
 });
 
+
 app.post('/hello', function (req, res, next) {
 	var userName = req.body.user_name;
 	var botPayload = {
@@ -27,101 +28,121 @@ app.post('/hello', function (req, res, next) {
     }
 });
 
+
 app.post('/git', function (req, res, next) {
-  var userName = req.body.user_name;
-  console.log('username: ' + userName);
-  console.log(req.body);
-  var result = '';
-  
-   var headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Basic bmthbWJvaDphcG9sbG8xMw==',
-      'User-Agent': 'something custom'
-    };
+	var userName = req.body.user_name;
+	console.log('username: ' + userName);
+	console.log(req.body);
+	var result = '';
+	var fileName = 'UserDetailPanel';
 
-  var botPayload = {};
+  	var botPayload = {};
+	var prFileURLList = [];
+	var promiseList = [];
 
-  function getAllPRs() {
-  	return got('https://api.github.com/repos/AppDirect/AppDirect/pulls', {
-		'headers': headers
-	});
-	
-  }
+	var headers = {
+	  'Content-Type': 'application/json',
+	  'Authorization': 'Basic bmthbWJvaDphcG9sbG8xMw==',
+	  'User-Agent': 'something custom'
+	};
 
-  var prFileURLList = [];
-  var promiseList = [];
-  var filesMap = {};
-
-  async function getFilesDiff() {
-	prFileURLList.forEach(function(pr) {
-		var promise = got('https://api.github.com/repos/AppDirect/AppDirect/pulls/'+pr+'/files', {
-				'headers': headers
-			}).catch(error => {
-			console.log(error.response.body);
-			//=> 'Internal server error ...'
+	async function getAllPRs() {
+		return got('https://api.github.com/repos/AppDirect/AppDirect/pulls', {
+			'headers': headers
 		});
-		promiseList.push(promise);
-	})
-  }
+	}
 
-  async function run() {
-  	try {
-	  var response = await getAllPRs();
-	  var result = JSON.parse(response.body);
-		console.log ('data size:' + result.length);
-		result.forEach (function(record) {
-			prFileURLList.push(record.number);
-			botPayload[record.number] = {
-				'pr_id': record.number,
-				'title': record.title,
-				'developer': record.user.login,
-				'diff': record.diff_url,
-				'pr': record.html_url
+	async function getFilesDiff() {
+		prFileURLList.forEach(function(pr) {
+			var promise = got('https://api.github.com/repos/AppDirect/AppDirect/pulls/'+pr+'/files', {
+					'headers': headers
+				}).catch(error => {
+				console.log(error.response.body);
+				//=> 'Internal server error ...'
+			});
+			promiseList.push(promise);
+		})
+	}
 
-			}
-		});
-		getFilesDiff();
+	async function run() {
 		try {
-			await Promise.all(promiseList);
-			promiseList.forEach (function(promise) {
-				promise.then(response => {
-					if (response && response.body) {
-						var fileList = [];
-						var changes = JSON.parse(response.body);
-						changes.forEach(function(file) {
-							fileList.push(file.filename);
-						});
-						var prPath = response.requestUrl.split( '/' );
-						var prId = prPath[prPath.length-2];
-						if (botPayload[prId]) {
-							botPayload[prId].fileList = fileList;
-						} else {
-							console.log ('CANNOT FIND PR: ' + prId);
+		  var response = await getAllPRs();
+		  var result = JSON.parse(response.body);
+			console.log ('data size:' + result.length);
+			result.forEach (function(record) {
+				prFileURLList.push(record.number);
+				botPayload[record.number] = {
+					'pr_id': record.number,
+					'title': record.title,
+					'developer': record.user.login,
+					'diff': record.diff_url,
+					'pr': record.html_url
+
+				}
+			});
+			getFilesDiff();
+			try {
+				await Promise.all(promiseList).then(response => {
+					response.forEach(function(resp) {
+						if (resp && resp.body) {
+							var fileList = [];
+							var changes = JSON.parse(resp.body);
+							changes.forEach(function(file) {
+								fileList.push(file.filename);
+							});
+							var prPath = resp.requestUrl.split( '/' );
+							var prId = prPath[prPath.length-2];
+							if (botPayload[prId]) {
+								botPayload[prId].fileList = fileList;
+							} else {
+								console.log ('CANNOT FIND PR: ' + prId);
+							}
 						}
-					}
+					});
 				})
 				.catch(error => {
 					console.log ('error processing promise for file list: ');
 					console.log(error);
 					//=> 'Internal server error ...'
 				});
-			});
-		} catch (error) {
-			console.log ('error on promise for file list: ');
+
+
+				var returnPRs = {};
+				for (var key in botPayload) {
+				    if (botPayload.hasOwnProperty(key)) {
+				        var prfiles = botPayload[key].fileList;
+				        var containsFile = false;
+						if (prfiles) {
+							prfiles.forEach(function(file) {
+								if (file && file.indexOf(fileName) !== -1) {
+									containsFile = true;
+								}
+							});
+						}
+						if (containsFile === true) {
+							returnPRs[key] = botPayload[key];
+						}
+				    }
+				}
+				// Loop otherwise..
+				var count = Object.keys(returnPRs).length;
+				var payLoad = {
+				    text : 'Found ' + count + ' PRs that touch ' + fileName + ' Here is the list: ' + returnPRs
+				  };
+				if (userName !== 'slackbot') {
+				  	return res.status(200).json(payLoad);
+				} else {
+				  	return res.status(200).end();
+				}
+			} catch (error) {
+				console.log ('error on promise for file list: ');
+				console.log(error);
+			}
+		} catch(error) {
+			console.log('error getting prs: ');
 			console.log(error);
 		}
-	} catch(error) {
-		console.log('error getting prs: ');
-		console.log(error);
 	}
 
-    // Loop otherwise..
-    if (userName !== 'slackbot') {
-      	return res.status(200).json(botPayload);
-    } else {
-      	return res.status(200).end();
-    }
-  }
-
-  run();
+	run();
 });
