@@ -108,6 +108,7 @@ app.post('/git', function (req, res, next) {
 
 
 				var returnPRs = {};
+				var prs = [];
 				for (var key in botPayload) {
 				    if (botPayload.hasOwnProperty(key)) {
 				        var prfiles = botPayload[key].fileList;
@@ -121,13 +122,14 @@ app.post('/git', function (req, res, next) {
 						}
 						if (containsFile === true) {
 							returnPRs[key] = botPayload[key];
+							prs.push(botPayload[key].pr);
 						}
 				    }
 				}
 				// Loop otherwise..
-				var count = Object.keys(returnPRs).length;
+				var count = prs.length;
 				var payLoad = {
-				    text : 'Found ' + count + ' PRs that touch ' + fileName + ' Here is the list: ' + returnPRs
+				    text : 'Found ' + count + ' PRs that touch ' + fileName + ' Here is the list: ' + prs.toString()
 				  };
 				if (userName !== 'slackbot') {
 				  	return res.status(200).json(payLoad);
