@@ -34,7 +34,11 @@ app.post('/git', function (req, res, next) {
 	console.log('username: ' + userName);
 	console.log(req.body);
 	var result = '';
-	var fileName = 'UserDetailPanel';
+	var text = req.body.text;
+	var fileName = '';
+	if (text) {
+		fileName = text.substring(text.indexOf(' ')).trim();
+	}
 
   	var botPayload = {};
 	var prFileURLList = [];
@@ -128,8 +132,21 @@ app.post('/git', function (req, res, next) {
 				}
 				// Loop otherwise..
 				var count = prs.length;
+				console.log ('pr count: ' + count);
+				var prUrls = "";
+				if (count > 0) {
+					prUrls += 'Found ' + count + ' PRs that touch ' + fileName + ' Here is the list:\n ';
+					prs.forEach(function (pr) {
+						prUrls += pr + '\n';
+					})
+				} else {
+					prUrls = 'Did not find any PRs that touch ' + fileName;
+				}
+
+				console.log ('text: ' + prUrls);
+				
 				var payLoad = {
-				    text : 'Found ' + count + ' PRs that touch ' + fileName + ' Here is the list: ' + prs.toString()
+				    text :  prUrls
 				  };
 				if (userName !== 'slackbot') {
 				  	return res.status(200).json(payLoad);
