@@ -46,7 +46,7 @@ app.post('/git', function (req, res, next) {
 
 	var headers = {
 	  'Content-Type': 'application/json',
-	  'Authorization': 'Basic bmthbWJvaDphcG9sbG8xMw==',
+	  'Authorization': 'Basic [token_here]',
 	  'User-Agent': 'something custom'
 	};
 
